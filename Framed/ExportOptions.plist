@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>architectures</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>compileBitcode</key>
+	<false/>
+	<key>method</key>
+	<string>developer-id</string>
+	<key>signingCertificate</key>
+	<string>Developer ID Application: Victor Noagbodji (2DZ6D8C78T)</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>stripSwiftSymbols</key>
+	<true/>
+	<key>thinning</key>
+	<string>&lt;none&gt;</string>
+</dict>
+</plist>

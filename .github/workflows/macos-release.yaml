@@ -1,0 +1,83 @@
+name: macOS Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Create build directory
+        run: mkdir -p build
+
+      - name: Import Developer ID Certificate
+        run: |
+          echo "${{ secrets.DEVELOPER_ID_P12 }}" | base64 --decode > build/DeveloperID.p12
+          security create-keychain -p "" build.keychain
+          security import build/DeveloperID.p12 -k build.keychain -P "${{ secrets.DEVELOPER_ID_P12_PASSWORD }}" -T /usr/bin/codesign
+          security list-keychains -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security set-keychain-settings -t 3600 -l build.keychain
+
+      - name: Configure keychain for codesign
+        run: |
+          security set-key-partition-list -S apple-tool:,apple: -k "" build.keychain
+
+      - name: Build and Archive App
+        run: |
+          set -o pipefail
+          xcodebuild -project "Framed/Framed.xcodeproj" \
+            -scheme "Framed" \
+            -configuration Release \
+            -archivePath "$PWD/build/Framed.xcarchive" \
+            -destination "platform=macOS,arch=arm64" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            DEBUG_INFORMATION_FORMAT="dwarf" \
+            ENABLE_HARDENED_RUNTIME=YES \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            CODE_SIGN_IDENTITY="Developer ID Application: Victor Noagbodji (2DZ6D8C78T)" \
+            archive
+
+      - name: Export App
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$PWD/build/Framed.xcarchive" \
+            -exportOptionsPlist "$PWD/Framed/ExportOptions.plist" \
+            -exportPath "$PWD/build"
+
+      - name: Notarize app
+        run: |
+          ditto -c -k --keepParent "build/Framed.app" "build/Framed.zip"
+          xcrun notarytool submit "build/Framed.zip" \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --password "${{ secrets.APP_SPECIFIC_PASSWORD }}" \
+            --wait
+          xcrun stapler staple "build/Framed.app"
+
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "Framed" \
+            -srcfolder "build/Framed.app" \
+            -ov -format UDZO "build/Framed.dmg"
+
+      - name: Upload DMG to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Framed.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
