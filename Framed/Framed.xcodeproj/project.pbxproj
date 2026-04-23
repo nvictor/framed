@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5A501500000000000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5A501500000000000000002 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		57F100022F78810000B396D0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -15,10 +19,6 @@
 			remoteInfo = Framed;
 		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXBuildFile section */
-		5A501500000000000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5A501500000000000000002 /* Sparkle */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		572A4DC32F787F2100B396D0 /* Framed.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Framed.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -486,6 +486,7 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		5A501500000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -504,7 +505,6 @@
 			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
-
 	};
 	rootObject = 572A4DBB2F787F2100B396D0 /* Project object */;
 }
