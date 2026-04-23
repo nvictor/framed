@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FramedMenuView: View {
     @ObservedObject var model: FramedMenuModel
+    @ObservedObject var updater: AppUpdater
 
     var body: some View {
         Section("Aspect Ratio") {
@@ -54,6 +55,11 @@ struct FramedMenuView: View {
         }
 
         Divider()
+
+        Button("Check for Updates...") {
+            updater.checkForUpdates()
+        }
+        .disabled(!updater.canCheckForUpdates)
 
         Button("Quit Framed") {
             NSApplication.shared.terminate(nil)

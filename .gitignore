@@ -2,6 +2,8 @@
 
 # Xcode user data
 *.xcuserstate
+*.xcworkspace
+!*.xcworkspace/contents.xcworkspacedata
 xcuserdata/
 
 # Build products
