@@ -60,13 +60,18 @@ struct WindowResizer {
         AXIsProcessTrusted()
     }
 
+    @discardableResult
+    func requestAccessibilityPermission() -> Bool {
+        ensureAccessibilityPermission(prompt: true)
+    }
+
     func resize(_ visibleWindow: VisibleWindow?, to preset: AspectRatioPreset) -> ResizeResult {
         guard let visibleWindow else {
             log("Resize aborted: no window selected.")
             return .noWindowSelected
         }
 
-        guard ensureAccessibilityPermission(prompt: true) else {
+        guard accessibilityPermissionGranted() else {
             log("Resize aborted: Accessibility permission missing.")
             return .needsAccessibilityPermission
         }

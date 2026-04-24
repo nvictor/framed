@@ -49,6 +49,10 @@ struct FramedMenuView: View {
         }
 
         if !model.hasAccessibilityPermission {
+            Button("Grant Accessibility Access") {
+                model.requestAccessibilityPermission()
+            }
+
             Button("Open Accessibility Settings") {
                 model.openAccessibilitySettings()
             }

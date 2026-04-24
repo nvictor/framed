@@ -15,6 +15,7 @@ final class FramedMenuModel: ObservableObject {
     private let userDefaults: UserDefaults
     private let selectedPresetKey = "selectedAspectRatioPreset"
     private var resetTask: Task<Void, Never>?
+    private var permissionPollTask: Task<Void, Never>?
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -26,10 +27,14 @@ final class FramedMenuModel: ObservableObject {
         self.visibleWindows = initialWindows
         self.selectedWindowID = initialWindows.first?.id
         self.statusMessage = "Choose a ratio, then choose a visible window."
+
+        logRuntimeIdentity()
+        startPermissionPolling()
     }
 
     deinit {
         resetTask?.cancel()
+        permissionPollTask?.cancel()
     }
 
     func selectPreset(_ preset: AspectRatioPreset) {
@@ -66,7 +71,18 @@ final class FramedMenuModel: ObservableObject {
     func permissionMessage() -> String {
         hasAccessibilityPermission
             ? "Accessibility access is enabled."
-            : "Accessibility access is required to resize other apps."
+            : "Accessibility access is required to resize other apps. If you just updated Framed, grant access to the current copy and relaunch it once."
+    }
+
+    func requestAccessibilityPermission() {
+        let granted = resizer.requestAccessibilityPermission()
+        hasAccessibilityPermission = granted
+
+        if granted {
+            updateStatus(using: "Accessibility access is enabled.", resetOnSuccess: false)
+        } else {
+            updateStatus(using: "Grant Accessibility access to the current Framed app, then relaunch it once.", resetOnSuccess: false)
+        }
     }
 
     func openAccessibilitySettings() {
@@ -89,5 +105,25 @@ final class FramedMenuModel: ObservableObject {
             try? await Task.sleep(for: .seconds(4))
             statusMessage = "Choose a ratio, then choose a visible window."
         }
+    }
+
+    private func startPermissionPolling() {
+        permissionPollTask = Task { @MainActor in
+            while !Task.isCancelled {
+                hasAccessibilityPermission = resizer.accessibilityPermissionGranted()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func logRuntimeIdentity() {
+        let bundle = Bundle.main
+        let bundleID = bundle.bundleIdentifier ?? "unknown"
+        let bundlePath = bundle.bundleURL.path
+        let executablePath = bundle.executableURL?.path ?? "unknown"
+        let shortVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let buildVersion = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+
+        FramedDiagnostics.shared.log("Runtime identity bundleID=\(bundleID) version=\(shortVersion) build=\(buildVersion) bundlePath=\(bundlePath) executablePath=\(executablePath).")
     }
 }
