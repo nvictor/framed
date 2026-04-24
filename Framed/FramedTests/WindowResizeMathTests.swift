@@ -21,6 +21,28 @@ final class WindowResizeMathTests: XCTestCase {
         XCTAssertEqual(resizedFrame.height, 900)
     }
 
+    func testNineBySixteenKeepsWidthAndComputesExpectedHeight() {
+        let frame = CGRect(x: 100, y: 150, width: 900, height: 900)
+
+        let resizedFrame = WindowResizeMath.resizedFrameKeepingWidthCentered(frame, preset: .nineBySixteen)
+
+        XCTAssertEqual(resizedFrame.width, 900)
+        XCTAssertEqual(resizedFrame.height, 1600)
+        XCTAssertEqual(resizedFrame.midX, frame.midX)
+        XCTAssertEqual(resizedFrame.midY, frame.midY)
+    }
+
+    func testThreeByFourKeepsWidthAndComputesExpectedHeight() {
+        let frame = CGRect(x: 100, y: 150, width: 900, height: 900)
+
+        let resizedFrame = WindowResizeMath.resizedFrameKeepingWidthCentered(frame, preset: .threeByFour)
+
+        XCTAssertEqual(resizedFrame.width, 900)
+        XCTAssertEqual(resizedFrame.height, 1200)
+        XCTAssertEqual(resizedFrame.midX, frame.midX)
+        XCTAssertEqual(resizedFrame.midY, frame.midY)
+    }
+
     func testOneByOneRoundsHeightForOddWidths() {
         let frame = CGRect(x: 41, y: 57, width: 801, height: 603)
 
@@ -59,5 +81,21 @@ final class WindowResizeMathTests: XCTestCase {
         XCTAssertEqual(resizedFrame.height, 900)
         XCTAssertEqual(resizedFrame.midX, frame.midX)
         XCTAssertEqual(resizedFrame.midY, frame.midY)
+    }
+
+    func testPortraitResizeFitsVisibleAreaWhenDesiredHeightWouldOverflow() {
+        let frame = CGRect(x: 100, y: 100, width: 900, height: 900)
+        let visibleArea = CGRect(x: 0, y: 0, width: 1400, height: 1000)
+
+        let resizedFrame = WindowResizeMath.resizedFrameFittingVisibleArea(
+            frame,
+            preset: .nineBySixteen,
+            visibleArea: visibleArea
+        )
+
+        XCTAssertEqual(resizedFrame.width, 562)
+        XCTAssertEqual(resizedFrame.height, 999)
+        XCTAssertEqual(resizedFrame.midX, frame.midX)
+        XCTAssertEqual(resizedFrame.midY, visibleArea.midY, accuracy: 0.5)
     }
 }
