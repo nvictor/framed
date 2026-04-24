@@ -74,22 +74,20 @@ final class FramedMenuModel: ObservableObject {
             : "Accessibility access is required."
     }
 
-    func requestAccessibilityPermission() {
+    func openAccessibilitySettings() {
         let granted = resizer.requestAccessibilityPermission()
         hasAccessibilityPermission = granted
 
         if granted {
             updateStatus(using: "Accessibility access is enabled.", resetOnSuccess: false)
-        } else {
-            updateStatus(using: "Grant Accessibility access, then relaunch Framed.", resetOnSuccess: false)
+            return
         }
-    }
 
-    func openAccessibilitySettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else {
             return
         }
 
+        updateStatus(using: "Grant Accessibility access, then relaunch Framed.", resetOnSuccess: false)
         NSWorkspace.shared.open(url)
     }
 
