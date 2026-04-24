@@ -71,7 +71,7 @@ final class FramedMenuModel: ObservableObject {
     func permissionMessage() -> String {
         hasAccessibilityPermission
             ? "Accessibility access is enabled."
-            : "Accessibility access is required to resize other apps. If you just updated Framed, grant access to the current copy and relaunch it once."
+            : "Accessibility access is required."
     }
 
     func requestAccessibilityPermission() {
@@ -81,7 +81,7 @@ final class FramedMenuModel: ObservableObject {
         if granted {
             updateStatus(using: "Accessibility access is enabled.", resetOnSuccess: false)
         } else {
-            updateStatus(using: "Grant Accessibility access to the current Framed app, then relaunch it once.", resetOnSuccess: false)
+            updateStatus(using: "Grant Accessibility access, then relaunch Framed.", resetOnSuccess: false)
         }
     }
 

@@ -25,9 +25,22 @@
 		57F100002F78810000B396D0 /* FramedTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FramedTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5A501500000000000000004 /* Exceptions for "Framed" folder in "Framed" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 572A4DC22F787F2100B396D0 /* Framed */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		572A4DC52F787F2100B396D0 /* Framed */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5A501500000000000000004 /* Exceptions for "Framed" folder in "Framed" target */,
+			);
 			path = Framed;
 			sourceTree = "<group>";
 		};

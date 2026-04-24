@@ -21,7 +21,7 @@ enum ResizeResult {
         case .alreadyAtRatio(let preset):
             return "Selected window is already \(preset.title)."
         case .needsAccessibilityPermission:
-            return "Grant Accessibility access to the current Framed app, then relaunch it once."
+            return "Grant Accessibility access, then relaunch Framed."
         case .noWindowSelected:
             return "Select a visible window before resizing."
         case .noMatchingWindow:
