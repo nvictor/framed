@@ -16,6 +16,10 @@ struct VisibleWindow: Identifiable, Equatable {
 
         return "\(ownerName): \(trimmedTitle)"
     }
+
+    var dimensionSummary: String {
+        "\(Int(frame.width)) x \(Int(frame.height))"
+    }
 }
 
 extension CGRect {
