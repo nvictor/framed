@@ -20,6 +20,10 @@ struct VisibleWindow: Identifiable, Equatable {
     var dimensionSummary: String {
         "\(Int(frame.width)) x \(Int(frame.height))"
     }
+
+    var menuDisplayName: String {
+        "\(displayName) - \(dimensionSummary)"
+    }
 }
 
 extension CGRect {

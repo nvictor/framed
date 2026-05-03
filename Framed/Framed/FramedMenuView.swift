@@ -28,13 +28,9 @@ struct FramedMenuView: View {
                         model.apply(to: window)
                     } label: {
                         if model.selectedWindowID == window.id {
-                            Label {
-                                windowLabel(for: window)
-                            } icon: {
-                                Image(systemName: "checkmark")
-                            }
+                            Label(window.menuDisplayName, systemImage: "checkmark")
                         } else {
-                            windowLabel(for: window)
+                            Text(window.menuDisplayName)
                         }
                     }
                 }
@@ -73,11 +69,4 @@ struct FramedMenuView: View {
         }
     }
 
-    private func windowLabel(for window: VisibleWindow) -> some View {
-        HStack(spacing: 0) {
-            Text(window.displayName)
-            Text(" - \(window.dimensionSummary)")
-                .foregroundStyle(.secondary)
-        }
-    }
 }
