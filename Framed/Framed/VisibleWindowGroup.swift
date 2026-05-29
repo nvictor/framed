@@ -28,6 +28,6 @@ struct VisibleWindowGroup: Identifiable, Equatable {
             groups.append(VisibleWindowGroup(ownerName: window.ownerName, windows: [window]))
         }
 
-        return groups
+        return groups.filter { $0.windowCount > 1 }
     }
 }
