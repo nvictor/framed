@@ -19,6 +19,24 @@ struct FramedMenuView: View {
             }
         }
 
+        Section("Application Groups") {
+            if model.visibleWindowGroups.isEmpty {
+                Text("No application groups found.")
+            } else {
+                ForEach(model.visibleWindowGroups) { group in
+                    Button {
+                        model.apply(to: group)
+                    } label: {
+                        if model.selectedGroupID == group.id {
+                            Label(group.menuDisplayName, systemImage: "checkmark")
+                        } else {
+                            Text(group.menuDisplayName)
+                        }
+                    }
+                }
+            }
+        }
+
         Section("Visible Windows") {
             if model.visibleWindows.isEmpty {
                 Text("No visible windows found.")

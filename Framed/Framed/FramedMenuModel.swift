@@ -9,7 +9,9 @@ final class FramedMenuModel: ObservableObject {
     @Published var statusMessage: String
     @Published var hasAccessibilityPermission: Bool
     @Published var visibleWindows: [VisibleWindow]
+    @Published var visibleWindowGroups: [VisibleWindowGroup]
     @Published var selectedWindowID: CGWindowID?
+    @Published var selectedGroupID: VisibleWindowGroup.ID?
 
     private let resizer = WindowResizer()
     private let userDefaults: UserDefaults
@@ -25,7 +27,9 @@ final class FramedMenuModel: ObservableObject {
         self.selectedPreset = storedPreset ?? .default
         self.hasAccessibilityPermission = resizer.accessibilityPermissionGranted()
         self.visibleWindows = initialWindows
+        self.visibleWindowGroups = VisibleWindowGroup.groups(from: initialWindows)
         self.selectedWindowID = initialWindows.first?.id
+        self.selectedGroupID = nil
         self.statusMessage = "Choose a ratio, then choose a visible window."
 
         logRuntimeIdentity()
@@ -45,13 +49,21 @@ final class FramedMenuModel: ObservableObject {
     func refreshVisibleWindows() {
         let windows = resizer.visibleWindows()
         visibleWindows = windows
+        visibleWindowGroups = VisibleWindowGroup.groups(from: windows)
 
-        if let selectedWindowID,
-           windows.contains(where: { $0.id == selectedWindowID }) {
+        if let selectedGroupID,
+           visibleWindowGroups.contains(where: { $0.id == selectedGroupID }) {
+            selectedWindowID = nil
             return
         }
 
-        self.selectedWindowID = windows.first?.id
+        selectedGroupID = nil
+
+        if let selectedWindowID,
+           windows.contains(where: { $0.id == selectedWindowID }) {
+        } else {
+            self.selectedWindowID = windows.first?.id
+        }
     }
 
     func apply(to window: VisibleWindow) {
@@ -62,8 +74,41 @@ final class FramedMenuModel: ObservableObject {
             guard let self else { return }
 
             self.selectedWindowID = window.id
+            self.selectedGroupID = nil
             self.hasAccessibilityPermission = permissionGranted
             self.updateStatus(using: result.message, resetOnSuccess: true)
+            self.refreshVisibleWindows()
+        }
+    }
+
+    func apply(to group: VisibleWindowGroup) {
+        var results: [ResizeResult] = []
+        var permissionGranted = true
+
+        for window in group.windows {
+            let result = resizer.resize(window, to: selectedPreset)
+            results.append(result)
+
+            if result.requiresAccessibilityPermission {
+                permissionGranted = false
+                break
+            }
+        }
+
+        let summary = WindowGroupResizeSummary(
+            appName: group.ownerName,
+            windowCount: group.windowCount,
+            preset: selectedPreset,
+            results: results
+        )
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+
+            self.selectedGroupID = group.id
+            self.selectedWindowID = nil
+            self.hasAccessibilityPermission = permissionGranted && self.resizer.accessibilityPermissionGranted()
+            self.updateStatus(using: summary.message, resetOnSuccess: summary.completedCount > 0)
             self.refreshVisibleWindows()
         }
     }
