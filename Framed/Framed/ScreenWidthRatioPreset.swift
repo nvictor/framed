@@ -4,7 +4,7 @@ import Foundation
 enum ScreenWidthRatioPreset: String, CaseIterable, Identifiable {
     case half = "50%"
     case goldenRatio = "61.8%"
-    case ninety = "90%"
+    case ninetyFive = "95%"
 
     var id: String { rawValue }
 
@@ -16,8 +16,8 @@ enum ScreenWidthRatioPreset: String, CaseIterable, Identifiable {
             return 0.5
         case .goldenRatio:
             return 0.618
-        case .ninety:
-            return 0.9
+        case .ninetyFive:
+            return 0.95
         }
     }
 }
