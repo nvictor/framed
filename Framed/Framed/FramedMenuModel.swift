@@ -1,21 +1,20 @@
 import AppKit
 import Combine
-import CoreGraphics
 import Foundation
 
 @MainActor
 final class FramedMenuModel: ObservableObject {
     @Published var selectedPreset: AspectRatioPreset
+    @Published var selectedWidthRatio: ScreenWidthRatioPreset?
     @Published var statusMessage: String
     @Published var hasAccessibilityPermission: Bool
-    @Published var visibleWindows: [VisibleWindow]
     @Published var visibleWindowGroups: [VisibleWindowGroup]
-    @Published var selectedWindowID: CGWindowID?
     @Published var selectedGroupID: VisibleWindowGroup.ID?
 
     private let resizer = WindowResizer()
     private let userDefaults: UserDefaults
     private let selectedPresetKey = "selectedAspectRatioPreset"
+    private let selectedWidthRatioKey = "selectedScreenWidthRatioPreset"
     private var resetTask: Task<Void, Never>?
     private var permissionPollTask: Task<Void, Never>?
 
@@ -23,14 +22,15 @@ final class FramedMenuModel: ObservableObject {
         self.userDefaults = userDefaults
         let storedPreset = userDefaults.string(forKey: selectedPresetKey)
             .flatMap(AspectRatioPreset.init(rawValue:))
+        let storedWidthRatio = userDefaults.string(forKey: selectedWidthRatioKey)
+            .flatMap(ScreenWidthRatioPreset.init(rawValue:))
         let initialWindows = resizer.visibleWindows()
         self.selectedPreset = storedPreset ?? .default
+        self.selectedWidthRatio = storedWidthRatio
         self.hasAccessibilityPermission = resizer.accessibilityPermissionGranted()
-        self.visibleWindows = initialWindows
         self.visibleWindowGroups = VisibleWindowGroup.groups(from: initialWindows)
-        self.selectedWindowID = initialWindows.first?.id
         self.selectedGroupID = nil
-        self.statusMessage = "Choose a ratio, then choose a visible window."
+        self.statusMessage = "Choose a ratio, then choose an application group."
 
         logRuntimeIdentity()
         startPermissionPolling()
@@ -46,38 +46,22 @@ final class FramedMenuModel: ObservableObject {
         userDefaults.set(preset.rawValue, forKey: selectedPresetKey)
     }
 
-    func refreshVisibleWindows() {
-        let windows = resizer.visibleWindows()
-        visibleWindows = windows
-        visibleWindowGroups = VisibleWindowGroup.groups(from: windows)
+    func selectWidthRatio(_ preset: ScreenWidthRatioPreset?) {
+        selectedWidthRatio = preset
 
-        if let selectedGroupID,
-           visibleWindowGroups.contains(where: { $0.id == selectedGroupID }) {
-            selectedWindowID = nil
-            return
-        }
-
-        selectedGroupID = nil
-
-        if let selectedWindowID,
-           windows.contains(where: { $0.id == selectedWindowID }) {
+        if let preset {
+            userDefaults.set(preset.rawValue, forKey: selectedWidthRatioKey)
         } else {
-            self.selectedWindowID = windows.first?.id
+            userDefaults.removeObject(forKey: selectedWidthRatioKey)
         }
     }
 
-    func apply(to window: VisibleWindow) {
-        let result = resizer.resize(window, to: selectedPreset)
-        let permissionGranted = resizer.accessibilityPermissionGranted()
+    func refreshVisibleWindows() {
+        let windows = resizer.visibleWindows()
+        visibleWindowGroups = VisibleWindowGroup.groups(from: windows)
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-
-            self.selectedWindowID = window.id
+        if let selectedGroupID, !visibleWindowGroups.contains(where: { $0.id == selectedGroupID }) {
             self.selectedGroupID = nil
-            self.hasAccessibilityPermission = permissionGranted
-            self.updateStatus(using: result.message, resetOnSuccess: true)
-            self.refreshVisibleWindows()
         }
     }
 
@@ -86,7 +70,7 @@ final class FramedMenuModel: ObservableObject {
         var permissionGranted = true
 
         for window in group.windows {
-            let result = resizer.resize(window, to: selectedPreset)
+            let result = resizer.resize(window, to: selectedPreset, widthRatio: selectedWidthRatio?.ratio)
             results.append(result)
 
             if result.requiresAccessibilityPermission {
@@ -106,7 +90,6 @@ final class FramedMenuModel: ObservableObject {
             guard let self else { return }
 
             self.selectedGroupID = group.id
-            self.selectedWindowID = nil
             self.hasAccessibilityPermission = permissionGranted && self.resizer.accessibilityPermissionGranted()
             self.updateStatus(using: summary.message, resetOnSuccess: summary.completedCount > 0)
             self.refreshVisibleWindows()
@@ -146,7 +129,7 @@ final class FramedMenuModel: ObservableObject {
 
         resetTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(4))
-            statusMessage = "Choose a ratio, then choose a visible window."
+            statusMessage = "Choose a ratio, then choose an application group."
         }
     }
 

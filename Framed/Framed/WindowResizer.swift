@@ -65,7 +65,7 @@ struct WindowResizer {
         ensureAccessibilityPermission(prompt: true)
     }
 
-    func resize(_ visibleWindow: VisibleWindow?, to preset: AspectRatioPreset) -> ResizeResult {
+    func resize(_ visibleWindow: VisibleWindow?, to preset: AspectRatioPreset, widthRatio: CGFloat? = nil) -> ResizeResult {
         guard let visibleWindow else {
             log("Resize aborted: no window selected.")
             return .noWindowSelected
@@ -95,7 +95,10 @@ struct WindowResizer {
 
         let targetVisibleArea = visibleArea(for: visibleWindow.frame)
         let resizedFrame: CGRect
-        if let targetVisibleArea {
+        if let widthRatio, let targetVisibleArea {
+            resizedFrame = WindowResizeMath.resizedFrameForWidthRatio(frame, preset: preset, widthRatio: widthRatio, visibleArea: targetVisibleArea)
+            log("Using visible area \(targetVisibleArea.debugSummary) with width ratio \(widthRatio) for \(visibleWindow.displayName).")
+        } else if let targetVisibleArea {
             resizedFrame = WindowResizeMath.resizedFrameFittingVisibleArea(frame, preset: preset, visibleArea: targetVisibleArea)
             log("Using visible area \(targetVisibleArea.debugSummary) for \(visibleWindow.displayName).")
         } else {

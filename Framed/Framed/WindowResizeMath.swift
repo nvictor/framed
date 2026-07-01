@@ -53,6 +53,31 @@ enum WindowResizeMath {
         )
     }
 
+    static func resizedFrameForWidthRatio(
+        _ frame: CGRect,
+        preset: AspectRatioPreset,
+        widthRatio: CGFloat,
+        visibleArea: CGRect
+    ) -> CGRect {
+        let desiredWidth = round(visibleArea.width * widthRatio)
+
+        let maxWidthForHeight = floor(visibleArea.height * preset.widthComponent / preset.heightComponent)
+        let fittedWidth = min(desiredWidth, floor(visibleArea.width), maxWidthForHeight)
+        let fittedHeight = round(fittedWidth * preset.heightComponent / preset.widthComponent)
+
+        let width = max(1, fittedWidth)
+        let height = max(1, min(fittedHeight, floor(visibleArea.height)))
+        let centerX = frame.midX
+        let centerY = frame.midY
+
+        let proposedX = round(centerX - width / 2)
+        let proposedY = round(centerY - height / 2)
+        let clampedX = min(max(proposedX, visibleArea.minX), visibleArea.maxX - width)
+        let clampedY = min(max(proposedY, visibleArea.minY), visibleArea.maxY - height)
+
+        return CGRect(x: round(clampedX), y: round(clampedY), width: round(width), height: round(height))
+    }
+
     static func aspectFitSize(in bounds: CGSize, preset: AspectRatioPreset) -> CGSize {
         let maxWidth = max(1, floor(bounds.width))
         let maxHeight = max(1, floor(bounds.height))

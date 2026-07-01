@@ -19,6 +19,30 @@ struct FramedMenuView: View {
             }
         }
 
+        Section("Screen Width") {
+            Button {
+                model.selectWidthRatio(nil)
+            } label: {
+                if model.selectedWidthRatio == nil {
+                    Label("Current Size", systemImage: "checkmark")
+                } else {
+                    Text("Current Size")
+                }
+            }
+
+            ForEach(ScreenWidthRatioPreset.allCases) { preset in
+                Button {
+                    model.selectWidthRatio(preset)
+                } label: {
+                    if model.selectedWidthRatio == preset {
+                        Label(preset.title, systemImage: "checkmark")
+                    } else {
+                        Text(preset.title)
+                    }
+                }
+            }
+        }
+
         Section("Application Groups") {
             if model.visibleWindowGroups.isEmpty {
                 Text("No application groups found.")
@@ -31,24 +55,6 @@ struct FramedMenuView: View {
                             Label(group.menuDisplayName, systemImage: "checkmark")
                         } else {
                             Text(group.menuDisplayName)
-                        }
-                    }
-                }
-            }
-        }
-
-        Section("Visible Windows") {
-            if model.visibleWindows.isEmpty {
-                Text("No visible windows found.")
-            } else {
-                ForEach(model.visibleWindows) { window in
-                    Button {
-                        model.apply(to: window)
-                    } label: {
-                        if model.selectedWindowID == window.id {
-                            Label(window.menuDisplayName, systemImage: "checkmark")
-                        } else {
-                            Text(window.menuDisplayName)
                         }
                     }
                 }
