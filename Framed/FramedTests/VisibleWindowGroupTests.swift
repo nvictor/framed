@@ -12,9 +12,11 @@ final class VisibleWindowGroupTests: XCTestCase {
 
         let groups = VisibleWindowGroup.groups(from: windows)
 
-        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups.count, 2)
         XCTAssertEqual(groups[0].ownerName, "Safari")
         XCTAssertEqual(groups[0].windows.map(\.id), [1, 3])
+        XCTAssertEqual(groups[1].ownerName, "Notes")
+        XCTAssertEqual(groups[1].windows.map(\.id), [2])
     }
 
     func testGroupsPreserveFirstSeenAppOrder() {
@@ -28,7 +30,7 @@ final class VisibleWindowGroupTests: XCTestCase {
 
         let groups = VisibleWindowGroup.groups(from: windows)
 
-        XCTAssertEqual(groups.map(\.ownerName), ["Notes", "Safari"])
+        XCTAssertEqual(groups.map(\.ownerName), ["Notes", "Safari", "Finder"])
     }
 
     func testWindowsInsideGroupPreserveVisibleWindowOrder() {
@@ -47,14 +49,17 @@ final class VisibleWindowGroupTests: XCTestCase {
         XCTAssertEqual(VisibleWindowGroup.groups(from: []), [])
     }
 
-    func testSingleWindowAppsProduceNoGroups() {
+    func testSingleWindowAppsProduceGroups() {
         let windows = [
             makeWindow(id: 1, ownerName: "Notes"),
             makeWindow(id: 2, ownerName: "Safari"),
             makeWindow(id: 3, ownerName: "Finder")
         ]
 
-        XCTAssertEqual(VisibleWindowGroup.groups(from: windows), [])
+        let groups = VisibleWindowGroup.groups(from: windows)
+
+        XCTAssertEqual(groups.map(\.ownerName), ["Notes", "Safari", "Finder"])
+        XCTAssertEqual(groups.map(\.windowCount), [1, 1, 1])
     }
 
     func testMenuDisplayNameUsesSingularAndPluralWindowLabels() {
