@@ -71,26 +71,77 @@ struct WindowResizer {
             return .noWindowSelected
         }
 
-        guard accessibilityPermissionGranted() else {
-            log("Resize aborted: Accessibility permission missing.")
-            return .needsAccessibilityPermission
+        return performResize(
+            visibleWindow,
+            to: preset,
+            widthRatio: widthRatio,
+            excluding: [],
+            placedFrames: []
+        ).result
+    }
+
+    /// Resizes every window in a group in one pass, making sure each AX window is
+    /// claimed at most once and that windows which would land on top of each
+    /// other are fanned out instead.
+    func resize(group windows: [VisibleWindow], to preset: AspectRatioPreset, widthRatio: CGFloat?) -> [ResizeResult] {
+        var consumed: [AXUIElement] = []
+        var placed: [CGRect] = []
+        var results: [ResizeResult] = []
+
+        for window in windows {
+            let outcome = performResize(
+                window,
+                to: preset,
+                widthRatio: widthRatio,
+                excluding: consumed,
+                placedFrames: placed
+            )
+
+            if let matchedWindow = outcome.matchedWindow {
+                consumed.append(matchedWindow)
+            }
+
+            if let finalFrame = outcome.finalFrame {
+                placed.append(finalFrame)
+            }
+
+            results.append(outcome.result)
+
+            if outcome.result.requiresAccessibilityPermission {
+                break
+            }
         }
 
-        guard let match = matchingWindow(for: visibleWindow) else {
+        return results
+    }
+
+    private func performResize(
+        _ visibleWindow: VisibleWindow,
+        to preset: AspectRatioPreset,
+        widthRatio: CGFloat?,
+        excluding consumedWindows: [AXUIElement],
+        placedFrames: [CGRect]
+    ) -> (result: ResizeResult, matchedWindow: AXUIElement?, finalFrame: CGRect?) {
+        guard accessibilityPermissionGranted() else {
+            log("Resize aborted: Accessibility permission missing.")
+            return (.needsAccessibilityPermission, nil, nil)
+        }
+
+        guard let match = matchingWindow(for: visibleWindow, excluding: consumedWindows) else {
             log("Resize aborted: no AX window matched \(visibleWindow.displayName).")
-            return .noMatchingWindow
+            return (.noMatchingWindow, nil, nil)
         }
 
         let window = match.window
         prepareWindowForResize(pid: visibleWindow.pid, window: window)
 
         guard sizeAttributeAppearsResizable(for: window, windowName: visibleWindow.displayName) else {
-            return .windowNotResizable
+            return (.windowNotResizable, window, nil)
         }
 
         guard let frame = copyFrame(of: window) else {
             log("Resize aborted: unable to read AX frame for \(visibleWindow.displayName).")
-            return .cannotReadWindowFrame
+            return (.cannotReadWindowFrame, window, nil)
         }
 
         let targetVisibleArea = visibleArea(for: visibleWindow.frame)
@@ -107,7 +158,7 @@ struct WindowResizer {
         }
         guard !resizedFrame.equalTo(frame) else {
             log("No-op resize: \(visibleWindow.displayName) already matches \(preset.title) with frame \(frame.debugSummary).")
-            return .alreadyAtRatio(preset)
+            return (.alreadyAtRatio(preset), window, frame)
         }
 
         log("AX match frame \(frame.debugSummary) -> target \(resizedFrame.debugSummary).")
@@ -119,19 +170,25 @@ struct WindowResizer {
             visibleArea: targetVisibleArea,
             windowName: visibleWindow.displayName
         ) else {
-            return .resizeNotApplied(observedFrame: copyFrame(of: window))
+            return (.resizeNotApplied(observedFrame: copyFrame(of: window)), window, nil)
         }
 
-        let finalFrame = WindowResizeMath.centeredFrame(
+        var finalFrame = WindowResizeMath.centeredFrame(
             around: frame,
             size: finalSize,
+            visibleArea: targetVisibleArea
+        )
+
+        finalFrame = WindowResizeMath.offsetToAvoidOverlap(
+            finalFrame,
+            avoiding: placedFrames,
             visibleArea: targetVisibleArea
         )
 
         let positionError = setPosition(finalFrame.origin, for: window)
         guard positionError == .success else {
             log("AX position write failed with error \(positionError.rawValue).")
-            return .cannotWritePosition(positionError)
+            return (.cannotWritePosition(positionError), window, nil)
         }
 
         if let observedAXFrame = verifiedAXFrame(for: window, targetFrame: finalFrame) {
@@ -147,16 +204,16 @@ struct WindowResizer {
         )
         guard let observedScreenFrame else {
             log("Resize writes completed for \(visibleWindow.displayName), but the window could not be confirmed on screen.")
-            return .resizeNotApplied(observedFrame: nil)
+            return (.resizeNotApplied(observedFrame: nil), window, nil)
         }
 
         guard framesMatch(observedScreenFrame, finalFrame) else {
             log("Resize writes completed for \(visibleWindow.displayName), but WindowServer reported \(observedScreenFrame.debugSummary) instead of \(finalFrame.debugSummary).")
-            return .resizeNotApplied(observedFrame: observedScreenFrame)
+            return (.resizeNotApplied(observedFrame: observedScreenFrame), window, nil)
         }
 
         log("Resize verified on screen for \(visibleWindow.displayName) at \(observedScreenFrame.debugSummary).")
-        return .success(preset)
+        return (.success(preset), window, observedScreenFrame)
     }
 
     private func ensureAccessibilityPermission(prompt: Bool) -> Bool {
@@ -167,7 +224,10 @@ struct WindowResizer {
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    private func matchingWindow(for visibleWindow: VisibleWindow) -> (window: AXUIElement, app: AXUIElement)? {
+    private func matchingWindow(
+        for visibleWindow: VisibleWindow,
+        excluding consumedWindows: [AXUIElement] = []
+    ) -> (window: AXUIElement, app: AXUIElement)? {
         let app = AXUIElementCreateApplication(visibleWindow.pid)
 
         var windowsValue: CFTypeRef?
@@ -180,35 +240,46 @@ struct WindowResizer {
 
         log("AX window lookup for \(visibleWindow.displayName) returned \(windows.count) app windows.")
 
-        let normalizedSelectedTitle = normalizedTitle(visibleWindow.title)
-        let matchingCandidates = windows.compactMap { window -> (window: AXUIElement, score: Int)? in
+        let candidates: [(element: AXUIElement, frame: CGRect, title: String)] = windows.compactMap { window in
             guard let frame = copyFrame(of: window) else {
                 log("Skipped AX candidate because frame could not be read.")
                 return nil
             }
 
-            let title = copyTitle(of: window)
-            let normalizedWindowTitle = normalizedTitle(title)
-            let frameScore = frameMatchScore(lhs: frame, rhs: visibleWindow.frame)
-            let titleScore = normalizedSelectedTitle.isEmpty ? 0 : (normalizedSelectedTitle == normalizedWindowTitle ? 100 : 0)
-            let score = titleScore + frameScore
-
-            log("AX candidate title='\(title)' frame=\(frame.debugSummary) score=\(score).")
-
-            guard frameScore > 0 || titleScore > 0 else {
-                return nil
-            }
-
-            return (window, score)
+            return (window, frame, copyTitle(of: window))
         }
 
-        if let bestMatch = matchingCandidates.max(by: { $0.score < $1.score }) {
-            log("Selected AX candidate with score \(bestMatch.score).")
-            return (bestMatch.window, app)
+        let excludedIndexes = Set(candidates.indices.filter { index in
+            consumedWindows.contains { CFEqual($0, candidates[index].element) }
+        })
+
+        for (index, candidate) in candidates.enumerated() {
+            let score = WindowMatching.score(
+                candidateFrame: candidate.frame,
+                candidateTitle: candidate.title,
+                against: visibleWindow
+            )
+            let note = excludedIndexes.contains(index) ? " (already resized in this pass)" : ""
+            log("AX candidate title='\(candidate.title)' frame=\(candidate.frame.debugSummary) score=\(score)\(note).")
         }
 
-        log("No AX candidate scored above zero for \(visibleWindow.displayName).")
-        return nil
+        guard let bestIndex = WindowMatching.bestCandidateIndex(
+            for: visibleWindow,
+            candidates: candidates.map { ($0.frame, $0.title) },
+            excluding: excludedIndexes
+        ) else {
+            log("No AX candidate scored above zero for \(visibleWindow.displayName).")
+            return nil
+        }
+
+        let best = candidates[bestIndex]
+        let bestScore = WindowMatching.score(
+            candidateFrame: best.frame,
+            candidateTitle: best.title,
+            against: visibleWindow
+        )
+        log("Selected AX candidate with score \(bestScore).")
+        return (best.element, app)
     }
 
     private func prepareWindowForResize(pid: pid_t, window: AXUIElement) {
@@ -417,39 +488,6 @@ struct WindowResizer {
         }
 
         return AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, axValue)
-    }
-
-    private func frameMatchScore(lhs: CGRect, rhs: CGRect) -> Int {
-        let originTolerance: CGFloat = 6
-        let sizeTolerance: CGFloat = 6
-
-        let originMatches = abs(lhs.origin.x - rhs.origin.x) <= originTolerance &&
-            abs(lhs.origin.y - rhs.origin.y) <= originTolerance
-        let sizeMatches = abs(lhs.size.width - rhs.size.width) <= sizeTolerance &&
-            abs(lhs.size.height - rhs.size.height) <= sizeTolerance
-
-        if originMatches && sizeMatches {
-            return 200
-        }
-
-        let centerMatches = abs(lhs.midX - rhs.midX) <= originTolerance &&
-            abs(lhs.midY - rhs.midY) <= originTolerance
-
-        if centerMatches && sizeMatches {
-            return 150
-        }
-
-        if centerMatches || sizeMatches {
-            return 75
-        }
-
-        return 0
-    }
-
-    private func normalizedTitle(_ title: String) -> String {
-        title
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
     }
 
     private func visibleArea(for frame: CGRect) -> CGRect? {

@@ -19,14 +19,14 @@ struct FramedMenuView: View {
             }
         }
 
-        Section("Screen Width") {
+        Section("Width") {
             Button {
                 model.selectWidthRatio(nil)
             } label: {
                 if model.selectedWidthRatio == nil {
-                    Label("Current Size", systemImage: "checkmark")
+                    Label("Keep Current Width", systemImage: "checkmark")
                 } else {
-                    Text("Current Size")
+                    Text("Keep Current Width")
                 }
             }
 

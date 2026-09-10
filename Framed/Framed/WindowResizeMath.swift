@@ -137,6 +137,64 @@ enum WindowResizeMath {
         )
     }
 
+    /// Nudges `frame` diagonally until its origin no longer coincides with any
+    /// frame in `placed`, so a group of windows that started stacked fans out
+    /// instead of landing on the exact same spot. Bounded so it always returns.
+    static func offsetToAvoidOverlap(
+        _ frame: CGRect,
+        avoiding placed: [CGRect],
+        visibleArea: CGRect?,
+        step: CGFloat = 32
+    ) -> CGRect {
+        guard !placed.isEmpty else {
+            return frame
+        }
+
+        let collisionTolerance: CGFloat = 8
+
+        func collides(_ candidate: CGRect) -> Bool {
+            placed.contains { existing in
+                abs(existing.origin.x - candidate.origin.x) <= collisionTolerance &&
+                    abs(existing.origin.y - candidate.origin.y) <= collisionTolerance
+            }
+        }
+
+        var result = frame
+        let maxIterations = placed.count + 1
+
+        for iteration in 0..<maxIterations {
+            guard collides(result) else {
+                break
+            }
+
+            var moved = CGRect(
+                x: result.origin.x + step,
+                y: result.origin.y + step,
+                width: result.width,
+                height: result.height
+            )
+
+            if let visibleArea {
+                if moved.maxX > visibleArea.maxX || moved.maxY > visibleArea.maxY {
+                    moved.origin.x = visibleArea.minX + step * CGFloat(iteration + 1)
+                    moved.origin.y = visibleArea.minY + step * CGFloat(iteration + 1)
+                }
+
+                moved.origin.x = min(max(moved.origin.x, visibleArea.minX), visibleArea.maxX - moved.width)
+                moved.origin.y = min(max(moved.origin.y, visibleArea.minY), visibleArea.maxY - moved.height)
+            }
+
+            result = moved
+        }
+
+        return CGRect(
+            x: round(result.origin.x),
+            y: round(result.origin.y),
+            width: round(result.width),
+            height: round(result.height)
+        )
+    }
+
     static func centeredFrame(
         around referenceFrame: CGRect,
         size: CGSize,

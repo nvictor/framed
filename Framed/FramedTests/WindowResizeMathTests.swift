@@ -98,4 +98,59 @@ final class WindowResizeMathTests: XCTestCase {
         XCTAssertEqual(resizedFrame.midX, frame.midX)
         XCTAssertEqual(resizedFrame.midY, visibleArea.midY, accuracy: 0.5)
     }
+
+    func testOffsetToAvoidOverlapLeavesFrameAloneWhenNothingIsPlaced() {
+        let frame = CGRect(x: 100, y: 100, width: 800, height: 450)
+
+        let result = WindowResizeMath.offsetToAvoidOverlap(frame, avoiding: [], visibleArea: nil)
+
+        XCTAssertEqual(result, frame)
+    }
+
+    func testOffsetToAvoidOverlapShiftsByStepWhenOriginCollides() {
+        let frame = CGRect(x: 100, y: 100, width: 800, height: 450)
+
+        let result = WindowResizeMath.offsetToAvoidOverlap(
+            frame,
+            avoiding: [frame],
+            visibleArea: nil,
+            step: 32
+        )
+
+        XCTAssertEqual(result, CGRect(x: 132, y: 132, width: 800, height: 450))
+    }
+
+    func testOffsetToAvoidOverlapWrapsBackInsideVisibleAreaNearTheEdge() {
+        let visibleArea = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let frame = CGRect(x: 1350, y: 820, width: 80, height: 70)
+
+        let result = WindowResizeMath.offsetToAvoidOverlap(
+            frame,
+            avoiding: [frame],
+            visibleArea: visibleArea,
+            step: 32
+        )
+
+        XCTAssertTrue(visibleArea.contains(result), "expected \(result) inside \(visibleArea)")
+        XCTAssertNotEqual(result.origin, frame.origin)
+    }
+
+    func testOffsetToAvoidOverlapGivesStackedWindowsDistinctOrigins() {
+        let base = CGRect(x: 100, y: 100, width: 800, height: 450)
+        var placed: [CGRect] = []
+
+        for _ in 0..<4 {
+            let next = WindowResizeMath.offsetToAvoidOverlap(base, avoiding: placed, visibleArea: nil, step: 32)
+            placed.append(next)
+        }
+
+        for i in placed.indices {
+            for j in placed.indices where j > i {
+                XCTAssertFalse(
+                    placed[i].origin == placed[j].origin,
+                    "windows \(i) and \(j) landed on the same origin \(placed[i].origin)"
+                )
+            }
+        }
+    }
 }

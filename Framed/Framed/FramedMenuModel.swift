@@ -66,18 +66,12 @@ final class FramedMenuModel: ObservableObject {
     }
 
     func apply(to group: VisibleWindowGroup) {
-        var results: [ResizeResult] = []
-        var permissionGranted = true
-
-        for window in group.windows {
-            let result = resizer.resize(window, to: selectedPreset, widthRatio: selectedWidthRatio?.ratio)
-            results.append(result)
-
-            if result.requiresAccessibilityPermission {
-                permissionGranted = false
-                break
-            }
-        }
+        let results = resizer.resize(
+            group: group.windows,
+            to: selectedPreset,
+            widthRatio: selectedWidthRatio?.ratio
+        )
+        let permissionGranted = !results.contains { $0.requiresAccessibilityPermission }
 
         let summary = WindowGroupResizeSummary(
             appName: group.ownerName,
