@@ -24,9 +24,9 @@ struct FramedMenuView: View {
                 model.selectWidthRatio(nil)
             } label: {
                 if model.selectedWidthRatio == nil {
-                    Label("Keep Current Width", systemImage: "checkmark")
+                    Label("Current Width", systemImage: "checkmark")
                 } else {
-                    Text("Keep Current Width")
+                    Text("Current Width")
                 }
             }
 
