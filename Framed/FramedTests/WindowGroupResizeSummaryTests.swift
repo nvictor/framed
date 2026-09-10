@@ -14,7 +14,7 @@ final class WindowGroupResizeSummaryTests: XCTestCase {
         XCTAssertEqual(summary.message, "Resized 2 Safari windows to 16:9.")
     }
 
-    func testMixedResultsReportPartialGroupResize() {
+    func testMixedResultsReportPartialGroupResizeWithFailureReason() {
         let summary = WindowGroupResizeSummary(
             appName: "Safari",
             windowCount: 3,
@@ -23,7 +23,25 @@ final class WindowGroupResizeSummaryTests: XCTestCase {
         )
 
         XCTAssertEqual(summary.completedCount, 2)
-        XCTAssertEqual(summary.message, "Resized 2 of 3 Safari windows to 4:3.")
+        XCTAssertEqual(
+            summary.message,
+            "Resized 2 of 3 Safari windows to 4:3. Framed could not match that visible window in Accessibility."
+        )
+    }
+
+    func testPartialResizeSurfacesTheResizeNotAppliedReason() {
+        let summary = WindowGroupResizeSummary(
+            appName: "Teams",
+            windowCount: 2,
+            preset: .sixteenByNine,
+            results: [.success(.sixteenByNine), .resizeNotApplied(observedFrame: nil)]
+        )
+
+        XCTAssertEqual(summary.completedCount, 1)
+        XCTAssertTrue(
+            summary.message.contains("could not confirm that the window changed"),
+            "expected the failure reason in \(summary.message)"
+        )
     }
 
     func testNoSuccessfulResultsReportsFirstFailure() {

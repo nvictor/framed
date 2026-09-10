@@ -12,6 +12,7 @@ final class FramedMenuModel: ObservableObject {
     @Published var selectedGroupID: VisibleWindowGroup.ID?
 
     private let resizer = WindowResizer()
+    private let feedbackOverlay = ResizeFeedbackOverlay()
     private let userDefaults: UserDefaults
     private let selectedPresetKey = "selectedAspectRatioPreset"
     private let selectedWidthRatioKey = "selectedScreenWidthRatioPreset"
@@ -66,11 +67,12 @@ final class FramedMenuModel: ObservableObject {
     }
 
     func apply(to group: VisibleWindowGroup) {
-        let results = resizer.resize(
+        let outcomes = resizer.resize(
             group: group.windows,
             to: selectedPreset,
             widthRatio: selectedWidthRatio?.ratio
         )
+        let results = outcomes.map(\.result)
         let permissionGranted = !results.contains { $0.requiresAccessibilityPermission }
 
         let summary = WindowGroupResizeSummary(
@@ -85,7 +87,11 @@ final class FramedMenuModel: ObservableObject {
 
             self.selectedGroupID = group.id
             self.hasAccessibilityPermission = permissionGranted && self.resizer.accessibilityPermissionGranted()
-            self.updateStatus(using: summary.message, resetOnSuccess: summary.completedCount > 0)
+            self.updateStatus(
+                using: summary.message,
+                resetOnSuccess: summary.completedCount == summary.windowCount
+            )
+            self.feedbackOverlay.flash(outcomes.map { ($0.frame, $0.didResize) })
             self.refreshVisibleWindows()
         }
     }

@@ -82,14 +82,15 @@ struct WindowResizer {
 
     /// Resizes every window in a group in one pass, making sure each AX window is
     /// claimed at most once and that windows which would land on top of each
-    /// other are fanned out instead.
-    func resize(group windows: [VisibleWindow], to preset: AspectRatioPreset, widthRatio: CGFloat?) -> [ResizeResult] {
+    /// other are fanned out instead. Each outcome carries the on-screen frame
+    /// where pass/fail feedback should be drawn.
+    func resize(group windows: [VisibleWindow], to preset: AspectRatioPreset, widthRatio: CGFloat?) -> [WindowResizeOutcome] {
         var consumed: [AXUIElement] = []
         var placed: [CGRect] = []
-        var results: [ResizeResult] = []
+        var outcomes: [WindowResizeOutcome] = []
 
         for window in windows {
-            let outcome = performResize(
+            let step = performResize(
                 window,
                 to: preset,
                 widthRatio: widthRatio,
@@ -97,22 +98,23 @@ struct WindowResizer {
                 placedFrames: placed
             )
 
-            if let matchedWindow = outcome.matchedWindow {
+            if let matchedWindow = step.matchedWindow {
                 consumed.append(matchedWindow)
             }
 
-            if let finalFrame = outcome.finalFrame {
-                placed.append(finalFrame)
+            let outcome = WindowResizeOutcome(window: window, result: step.result, frame: step.drawFrame)
+            if outcome.didResize {
+                placed.append(step.drawFrame)
             }
 
-            results.append(outcome.result)
+            outcomes.append(outcome)
 
-            if outcome.result.requiresAccessibilityPermission {
+            if step.result.requiresAccessibilityPermission {
                 break
             }
         }
 
-        return results
+        return outcomes
     }
 
     private func performResize(
@@ -121,27 +123,37 @@ struct WindowResizer {
         widthRatio: CGFloat?,
         excluding consumedWindows: [AXUIElement],
         placedFrames: [CGRect]
-    ) -> (result: ResizeResult, matchedWindow: AXUIElement?, finalFrame: CGRect?) {
+    ) -> (result: ResizeResult, matchedWindow: AXUIElement?, drawFrame: CGRect) {
         guard accessibilityPermissionGranted() else {
             log("Resize aborted: Accessibility permission missing.")
-            return (.needsAccessibilityPermission, nil, nil)
+            return (.needsAccessibilityPermission, nil, visibleWindow.frame)
         }
 
-        guard let match = matchingWindow(for: visibleWindow, excluding: consumedWindows) else {
+        // Electron / Catalyst apps often expose no AX windows until they are
+        // frontmost, so activate before matching and retry once.
+        activateApp(pid: visibleWindow.pid)
+
+        var match = matchingWindow(for: visibleWindow, excluding: consumedWindows)
+        if match == nil {
+            usleep(120_000)
+            match = matchingWindow(for: visibleWindow, excluding: consumedWindows)
+        }
+
+        guard let match else {
             log("Resize aborted: no AX window matched \(visibleWindow.displayName).")
-            return (.noMatchingWindow, nil, nil)
+            return (.noMatchingWindow, nil, bestKnownFrame(for: nil, windowID: visibleWindow.id, fallback: visibleWindow.frame))
         }
 
         let window = match.window
-        prepareWindowForResize(pid: visibleWindow.pid, window: window)
+        raiseWindow(window)
 
         guard sizeAttributeAppearsResizable(for: window, windowName: visibleWindow.displayName) else {
-            return (.windowNotResizable, window, nil)
+            return (.windowNotResizable, window, bestKnownFrame(for: window, windowID: visibleWindow.id, fallback: visibleWindow.frame))
         }
 
         guard let frame = copyFrame(of: window) else {
             log("Resize aborted: unable to read AX frame for \(visibleWindow.displayName).")
-            return (.cannotReadWindowFrame, window, nil)
+            return (.cannotReadWindowFrame, window, bestKnownFrame(for: window, windowID: visibleWindow.id, fallback: visibleWindow.frame))
         }
 
         let targetVisibleArea = visibleArea(for: visibleWindow.frame)
@@ -161,26 +173,31 @@ struct WindowResizer {
             return (.alreadyAtRatio(preset), window, frame)
         }
 
+        // Position first: pull the window fully onto the target area before
+        // asking for the new size, so the app/WindowServer does not clamp the
+        // width to keep an off-screen window visible.
+        let positioningFrame = WindowResizeMath.offsetToAvoidOverlap(
+            WindowResizeMath.centeredFrame(around: frame, size: resizedFrame.size, visibleArea: targetVisibleArea),
+            avoiding: placedFrames,
+            visibleArea: targetVisibleArea
+        )
+        _ = setPosition(positioningFrame.origin, for: window)
+        usleep(40_000)
+
         log("AX match frame \(frame.debugSummary) -> target \(resizedFrame.debugSummary).")
         guard let finalSize = resolvedSize(
             for: window,
             originalSize: frame.size,
-            targetSize: resizedFrame.size,
+            targetSize: positioningFrame.size,
             preset: preset,
             visibleArea: targetVisibleArea,
             windowName: visibleWindow.displayName
         ) else {
-            return (.resizeNotApplied(observedFrame: copyFrame(of: window)), window, nil)
+            return (.resizeNotApplied(observedFrame: copyFrame(of: window)), window, bestKnownFrame(for: window, windowID: visibleWindow.id, fallback: visibleWindow.frame))
         }
 
-        var finalFrame = WindowResizeMath.centeredFrame(
-            around: frame,
-            size: finalSize,
-            visibleArea: targetVisibleArea
-        )
-
-        finalFrame = WindowResizeMath.offsetToAvoidOverlap(
-            finalFrame,
+        let finalFrame = WindowResizeMath.offsetToAvoidOverlap(
+            WindowResizeMath.centeredFrame(around: positioningFrame, size: finalSize, visibleArea: targetVisibleArea),
             avoiding: placedFrames,
             visibleArea: targetVisibleArea
         )
@@ -188,11 +205,13 @@ struct WindowResizer {
         let positionError = setPosition(finalFrame.origin, for: window)
         guard positionError == .success else {
             log("AX position write failed with error \(positionError.rawValue).")
-            return (.cannotWritePosition(positionError), window, nil)
+            return (.cannotWritePosition(positionError), window, bestKnownFrame(for: window, windowID: visibleWindow.id, fallback: visibleWindow.frame))
         }
 
-        if let observedAXFrame = verifiedAXFrame(for: window, targetFrame: finalFrame) {
-            log("AX read-back after resize for \(visibleWindow.displayName): \(observedAXFrame.debugSummary).")
+        let axFrame = verifiedAXFrame(for: window, targetFrame: finalFrame)
+        let axConfirmed = axFrame.map { framesMatch($0, finalFrame) } ?? false
+        if let axFrame {
+            log("AX read-back after resize for \(visibleWindow.displayName): \(axFrame.debugSummary) (matched: \(axConfirmed)).")
         } else {
             log("AX read-back after resize for \(visibleWindow.displayName) was unavailable.")
         }
@@ -202,18 +221,37 @@ struct WindowResizer {
             targetFrame: finalFrame,
             originalFrame: visibleWindow.frame
         )
+
         guard let observedScreenFrame else {
+            if axConfirmed {
+                log("WindowServer confirmation lagged for \(visibleWindow.displayName); trusting matched AX read-back.")
+                return (.success(preset), window, finalFrame)
+            }
             log("Resize writes completed for \(visibleWindow.displayName), but the window could not be confirmed on screen.")
-            return (.resizeNotApplied(observedFrame: nil), window, nil)
+            return (.resizeNotApplied(observedFrame: nil), window, bestKnownFrame(for: window, windowID: visibleWindow.id, fallback: visibleWindow.frame))
         }
 
         guard framesMatch(observedScreenFrame, finalFrame) else {
+            if axConfirmed {
+                log("WindowServer reported \(observedScreenFrame.debugSummary) for \(visibleWindow.displayName) but AX read-back matched; trusting AX.")
+                return (.success(preset), window, finalFrame)
+            }
             log("Resize writes completed for \(visibleWindow.displayName), but WindowServer reported \(observedScreenFrame.debugSummary) instead of \(finalFrame.debugSummary).")
-            return (.resizeNotApplied(observedFrame: observedScreenFrame), window, nil)
+            return (.resizeNotApplied(observedFrame: observedScreenFrame), window, observedScreenFrame)
         }
 
         log("Resize verified on screen for \(visibleWindow.displayName) at \(observedScreenFrame.debugSummary).")
         return (.success(preset), window, observedScreenFrame)
+    }
+
+    private func bestKnownFrame(for window: AXUIElement?, windowID: CGWindowID, fallback: CGRect) -> CGRect {
+        if let serverFrame = currentVisibleFrame(for: windowID) {
+            return serverFrame
+        }
+        if let window, let axFrame = copyFrame(of: window) {
+            return axFrame
+        }
+        return fallback
     }
 
     private func ensureAccessibilityPermission(prompt: Bool) -> Bool {
@@ -282,11 +320,14 @@ struct WindowResizer {
         return (best.element, app)
     }
 
-    private func prepareWindowForResize(pid: pid_t, window: AXUIElement) {
+    private func activateApp(pid: pid_t) {
         if let app = NSRunningApplication(processIdentifier: pid) {
             app.activate()
+            usleep(60_000)
         }
+    }
 
+    private func raiseWindow(_ window: AXUIElement) {
         let raiseError = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         if raiseError == .success {
             log("Raised target window before resize.")
@@ -437,7 +478,7 @@ struct WindowResizer {
                 return nil
             }
 
-            guard let observedSize = sizeWrite.observedSize else {
+            guard var observedSize = sizeWrite.observedSize else {
                 if attempt == 0 {
                     log("Observed AX size after write was unavailable.")
                 } else {
@@ -453,8 +494,23 @@ struct WindowResizer {
             }
 
             if sizesMatch(observedSize, originalSize) {
-                log("AX size write was acknowledged but the size remained unchanged for \(windowName).")
-                return nil
+                guard attempt == 0 else {
+                    log("AX size write was acknowledged but the size remained unchanged for \(windowName).")
+                    return nil
+                }
+
+                log("AX size write for \(windowName) was acknowledged but unchanged; retrying after a longer delay.")
+                usleep(150_000)
+                let retry = writeSize(requestedSize, for: window)
+                guard retry.error == .success,
+                      let retrySize = retry.observedSize,
+                      !sizesMatch(retrySize, originalSize)
+                else {
+                    log("AX size write was acknowledged but the size remained unchanged for \(windowName).")
+                    return nil
+                }
+                observedSize = retrySize
+                log("Retry AX size write for \(windowName) took: w:\(Int(observedSize.width)) h:\(Int(observedSize.height)).")
             }
 
             if ratioMatches(observedSize, preset: preset) {
@@ -579,8 +635,8 @@ struct WindowResizer {
     }
 
     private func verifiedSize(for window: AXUIElement, targetSize: CGSize) -> CGSize? {
-        let attempts = 5
-        let delay: useconds_t = 50_000
+        let attempts = 8
+        let delay: useconds_t = 60_000
 
         for attempt in 0..<attempts {
             if let size = copySize(of: window) {

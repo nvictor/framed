@@ -13,7 +13,11 @@ struct WindowGroupResizeSummary {
         }
 
         if completedCount > 0 {
-            return "Resized \(completedCount) of \(windowCount) \(appName) \(windowLabel(for: windowCount)) to \(preset.title)."
+            let base = "Resized \(completedCount) of \(windowCount) \(appName) \(windowLabel(for: windowCount)) to \(preset.title)."
+            if let firstFailure {
+                return "\(base) \(firstFailure.message)"
+            }
+            return base
         }
 
         if let firstFailure {
