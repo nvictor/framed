@@ -44,7 +44,8 @@ final class ResizeFeedbackOverlay {
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
 
         let color: NSColor = didResize ? .systemGreen : .systemRed
-        window.contentView = BorderView(color: color, lineWidth: lineWidth, cornerRadius: cornerRadius)
+        let sizeText = "\(Int(frame.width.rounded())) × \(Int(frame.height.rounded()))"
+        window.contentView = BorderView(color: color, lineWidth: lineWidth, cornerRadius: cornerRadius, sizeText: sizeText)
 
         window.alphaValue = 1
         window.orderFrontRegardless()
@@ -68,11 +69,13 @@ final class ResizeFeedbackOverlay {
         private let color: NSColor
         private let borderWidth: CGFloat
         private let radius: CGFloat
+        private let sizeText: String
 
-        init(color: NSColor, lineWidth: CGFloat, cornerRadius: CGFloat) {
+        init(color: NSColor, lineWidth: CGFloat, cornerRadius: CGFloat, sizeText: String) {
             self.color = color
             self.borderWidth = lineWidth
             self.radius = cornerRadius
+            self.sizeText = sizeText
             super.init(frame: .zero)
         }
 
@@ -87,6 +90,31 @@ final class ResizeFeedbackOverlay {
             path.lineWidth = borderWidth
             color.setStroke()
             path.stroke()
+
+            drawSizeLabel()
+        }
+
+        private func drawSizeLabel() {
+            let fontSize = max(24, min(72, bounds.height * 0.16))
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: fontSize, weight: .bold),
+                .foregroundColor: color,
+                .shadow: {
+                    let shadow = NSShadow()
+                    shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
+                    shadow.shadowBlurRadius = 8
+                    shadow.shadowOffset = .zero
+                    return shadow
+                }()
+            ]
+
+            let attributedText = NSAttributedString(string: sizeText, attributes: attributes)
+            let textSize = attributedText.size()
+            let origin = CGPoint(
+                x: bounds.midX - textSize.width / 2,
+                y: bounds.midY - textSize.height / 2
+            )
+            attributedText.draw(at: origin)
         }
     }
 }
