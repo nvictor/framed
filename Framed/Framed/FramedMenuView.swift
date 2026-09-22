@@ -7,38 +7,29 @@ struct FramedMenuView: View {
     var body: some View {
         Section("Aspect Ratio") {
             ForEach(AspectRatioPreset.allCases) { preset in
-                Button {
-                    model.selectPreset(preset)
-                } label: {
-                    if model.selectedPreset == preset {
-                        Label(preset.title, systemImage: "checkmark")
-                    } else {
-                        Text(preset.title)
-                    }
+                Toggle(isOn: Binding(
+                    get: { model.selectedPreset == preset },
+                    set: { _ in model.selectPreset(preset) }
+                )) {
+                    Text(preset.title)
                 }
             }
         }
 
         Section("Width") {
-            Button {
-                model.selectWidthRatio(nil)
-            } label: {
-                if model.selectedWidthRatio == nil {
-                    Label("Current Width", systemImage: "checkmark")
-                } else {
-                    Text("Current Width")
-                }
+            Toggle(isOn: Binding(
+                get: { model.selectedWidthRatio == nil },
+                set: { _ in model.selectWidthRatio(nil) }
+            )) {
+                Text("Current Width")
             }
 
             ForEach(ScreenWidthRatioPreset.allCases) { preset in
-                Button {
-                    model.selectWidthRatio(preset)
-                } label: {
-                    if model.selectedWidthRatio == preset {
-                        Label(preset.title, systemImage: "checkmark")
-                    } else {
-                        Text(preset.title)
-                    }
+                Toggle(isOn: Binding(
+                    get: { model.selectedWidthRatio == preset },
+                    set: { _ in model.selectWidthRatio(preset) }
+                )) {
+                    Text(preset.title)
                 }
             }
         }
@@ -48,14 +39,11 @@ struct FramedMenuView: View {
                 Text("No application groups found.")
             } else {
                 ForEach(model.visibleWindowGroups) { group in
-                    Button {
-                        model.apply(to: group)
-                    } label: {
-                        if model.selectedGroupID == group.id {
-                            Label(group.menuDisplayName, systemImage: "checkmark")
-                        } else {
-                            Text(group.menuDisplayName)
-                        }
+                    Toggle(isOn: Binding(
+                        get: { model.selectedGroupID == group.id },
+                        set: { _ in model.apply(to: group) }
+                    )) {
+                        Text(group.menuDisplayName)
                     }
                 }
             }
