@@ -195,6 +195,36 @@ enum WindowResizeMath {
         )
     }
 
+    /// Picks the visible area of the screen that holds most of `windowFrame`.
+    ///
+    /// `windowFrame` is in Core Graphics coordinates (top-left origin, y grows
+    /// downward), as reported by CGWindowList and AX. `screens` are AppKit
+    /// rects (bottom-left origin), with the primary screen first, as in
+    /// `NSScreen.screens`. The result is converted to Core Graphics coordinates
+    /// so it can be compared with and written back to AX frames.
+    static func visibleArea(
+        containing windowFrame: CGRect,
+        screens: [(frame: CGRect, visibleFrame: CGRect)]
+    ) -> CGRect? {
+        guard let primaryScreenMaxY = screens.first?.frame.maxY else {
+            return nil
+        }
+
+        let visibleAreas = screens.map {
+            ResizeFeedbackGeometry.cgRect(fromCocoa: $0.visibleFrame, primaryScreenMaxY: primaryScreenMaxY)
+        }
+
+        guard let best = visibleAreas.max(by: {
+                $0.intersection(windowFrame).area < $1.intersection(windowFrame).area
+              }),
+              best.intersection(windowFrame).area > 0
+        else {
+            return nil
+        }
+
+        return best
+    }
+
     static func centeredFrame(
         around referenceFrame: CGRect,
         size: CGSize,

@@ -153,4 +153,33 @@ final class WindowResizeMathTests: XCTestCase {
             }
         }
     }
+
+    // Built-in 1470x956 primary with a 1920x1080 display stacked above it,
+    // as AppKit reports them (bottom-left origin).
+    private let stackedScreens: [(frame: CGRect, visibleFrame: CGRect)] = [
+        (CGRect(x: 0, y: 0, width: 1470, height: 956), CGRect(x: 0, y: 77, width: 1470, height: 846)),
+        (CGRect(x: -198, y: 956, width: 1920, height: 1080), CGRect(x: -198, y: 956, width: 1920, height: 1080))
+    ]
+
+    func testVisibleAreaFindsWindowOnDisplayAbovePrimary() {
+        let window = CGRect(x: 29, y: -983, width: 1397, height: 786)
+
+        let area = WindowResizeMath.visibleArea(containing: window, screens: stackedScreens)
+
+        XCTAssertEqual(area, CGRect(x: -198, y: -1080, width: 1920, height: 1080))
+    }
+
+    func testVisibleAreaOnPrimaryIsFlippedToTopLeftOrigin() {
+        let window = CGRect(x: 100, y: 100, width: 800, height: 500)
+
+        let area = WindowResizeMath.visibleArea(containing: window, screens: stackedScreens)
+
+        XCTAssertEqual(area, CGRect(x: 0, y: 33, width: 1470, height: 846))
+    }
+
+    func testVisibleAreaIsNilWhenWindowIsOffEveryScreen() {
+        let window = CGRect(x: 5000, y: 5000, width: 400, height: 300)
+
+        XCTAssertNil(WindowResizeMath.visibleArea(containing: window, screens: stackedScreens))
+    }
 }

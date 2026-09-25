@@ -547,17 +547,10 @@ struct WindowResizer {
     }
 
     private func visibleArea(for frame: CGRect) -> CGRect? {
-        let bestScreen = NSScreen.screens.max { lhs, rhs in
-            let lhsArea = lhs.visibleFrame.intersection(frame).area
-            let rhsArea = rhs.visibleFrame.intersection(frame).area
-            return lhsArea < rhsArea
-        }
-
-        guard let bestScreen, bestScreen.visibleFrame.intersection(frame).area > 0 else {
-            return nil
-        }
-
-        return bestScreen.visibleFrame
+        WindowResizeMath.visibleArea(
+            containing: frame,
+            screens: NSScreen.screens.map { ($0.frame, $0.visibleFrame) }
+        )
     }
 
     private func verifiedAXFrame(for window: AXUIElement, targetFrame: CGRect) -> CGRect? {

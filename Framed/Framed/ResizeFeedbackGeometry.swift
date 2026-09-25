@@ -14,4 +14,10 @@ enum ResizeFeedbackGeometry {
             height: cgRect.height
         )
     }
+
+    /// Converts an AppKit screen rect back into Core Graphics coordinates. The
+    /// flip is its own inverse, so this mirrors `cocoaRect(fromCG:)`.
+    static func cgRect(fromCocoa cocoaRect: CGRect, primaryScreenMaxY: CGFloat) -> CGRect {
+        self.cocoaRect(fromCG: cocoaRect, primaryScreenMaxY: primaryScreenMaxY)
+    }
 }
