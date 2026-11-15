@@ -74,9 +74,24 @@ jobs:
 
       - name: Create DMG
         run: |
-          hdiutil create -volname "Framed" \
-            -srcfolder "build/Framed.app" \
-            -ov -format UDZO "build/Framed.dmg"
+          rm -rf build/dmg-staging "build/Framed.dmg"
+          mkdir -p build/dmg-staging
+          ditto "build/Framed.app" "build/dmg-staging/Framed.app"
+          ln -s /Applications build/dmg-staging/Applications
+          for attempt in 1 2 3; do
+            if hdiutil create -volname "Framed" \
+              -srcfolder "build/dmg-staging" \
+              -fs HFS+ -ov -format UDZO "$PWD/build/Framed.dmg"; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "hdiutil failed after 3 attempts" >&2
+              exit 1
+            fi
+            echo "hdiutil attempt $attempt failed, retrying"
+            sleep 5
+          done
+          ls -la "build/Framed.dmg"
 
       - name: Generate Sparkle appcast
         env:
