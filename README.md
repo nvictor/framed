@@ -9,3 +9,5 @@ Framed is a macOS menu bar app for quickly resizing visible windows to common as
 - Keeps each window's current width by default, or sizes windows to a share of the screen width: `50%`, `61.8%` (golden ratio), or `95%`.
 - Groups visible windows by app and applies the selected ratios to every window in the chosen group.
 - Uses macOS Accessibility APIs, so it needs Accessibility permission in System Settings.
+
+Requires macOS 26.2 or later and Apple Silicon.
